@@ -17,129 +17,32 @@ namespace cutlass {
 namespace gemm {
 namespace threadblock {
 
+/// threadblock combine
 template <
- typename ElementC,
- typename LayoutC,
- int kElementCount,
- typename WarpThreadArrangement,
- typename WarpCount,
- int kThreadsPerGroup,
- int kWarpPartitionsK
->
-class AccumulatorCombine;
-
-
-///< Partial Specialization for thread combine
-template <
-  typename LayoutC_,
-  int ElementCount,
-  typename WarpThreadArrangement,
-  typename WarpCount
->
-class AccumulatorCombine<
-  float,
-  LayoutC_,
-  ElementCount,
-  WarpThreadArrangement,
-  WarpCount,
-  1,
-  1
->{
-public:
-  using ElementC = float;
-  using LayoutC = LayoutC_;
-  static int const kElementCount = ElementCount;
-  static int const kThreadsPerGroup = 1;
-  static int const kWarpPartitionsK = 1;
-
-  using FragmentC = cutlass::Array<ElementC, kElementCount>;
-
-public:
-  struct SharedStorage {};
-
-public:
-  CUTLASS_HOST_DEVICE
-  AccumulatorCombine() {}
-
-  CUTLASS_DEVICE
-  void operator()(SharedStorage &shared_storage, FragmentC &accumulator) {}
-};
-
-
-///< Partial Specialization for warp combine
-template <
- typename LayoutC_,
- int ElementCount,
- typename WarpThreadArrangement,
- typename WarpCount,
- int ThreadsPerGroup
->
-class AccumulatorCombine<
- float,
- LayoutC_,
- ElementCount,
- WarpThreadArrangement,
- WarpCount,
- ThreadsPerGroup,
- 1
->{
-public:
-  using ElementC = float;
-  using LayoutC = LayoutC_;
-  static int const kElementCount = ElementCount;
-  static int const kThreadsPerGroup = ThreadsPerGroup;
-  static int const kWarpPartitionsK = 1;
-
-  using FragmentC = cutlass::Array<ElementC, kElementCount>;
-  using CombineOp =
-      cutlass::gemm::warp::Reduce<ElementC, kElementCount, kThreadsPerGroup>;
-
-public:
-  struct SharedStorage {};
-
-public:
-  CUTLASS_HOST_DEVICE
-  AccumulatorCombine() {}
-
-  CUTLASS_DEVICE
-  void operator()(SharedStorage &shared_storage, FragmentC &accumulator) {
-    CombineOp combine_op;
-    combine_op(accumulator);
-  }
-};
-
-///< Partial Specialization for threadblock combine
-template <
- typename LayoutC_,
+ typename ElementAccumulator_,
+ typename LayoutAccumulator_,
  int ElementCount,
  typename WarpThreadArrangement_,
  typename WarpCount_,
  int ThreadsPerGroup,
  int WarpPartitionsK
 >
-class AccumulatorCombine<
- float,
- LayoutC_,
- ElementCount,
- WarpThreadArrangement_,
- WarpCount_,
- ThreadsPerGroup,
- WarpPartitionsK
-> {
+class AccumulatorCombine {
 public:
-  using ElementC = float;
-  using LayoutC = LayoutC_;
+  using ElementAccumulator = ElementAccumulator_;
+  using LayoutAccumulator = LayoutAccumulator_;
   using WarpThreadArrangement = WarpThreadArrangement_;
   using WarpCount = WarpCount_;
+
   static int const kElementCount = ElementCount;
   static int const kThreadsPerGroup = ThreadsPerGroup;
   static int const kWarpPartitionsK = WarpPartitionsK;
 
-  using FragmentC = cutlass::Array<ElementC, kElementCount>;
+  using FragmentC = cutlass::Array<ElementAccumulator, kElementCount>;
   using CombineOp =
-      cutlass::gemm::warp::Reduce<ElementC, kElementCount, kThreadsPerGroup>;
+      cutlass::gemm::warp::Reduce<ElementAccumulator, kElementCount, kThreadsPerGroup>;
 
-  using FragmentSharedReduce = cutlass::Array<ElementC, kWarpPartitionsK>;
+  using FragmentSharedReduce = cutlass::Array<ElementAccumulator, kWarpPartitionsK>;
 
 public:
   struct SharedStorage {
@@ -150,7 +53,7 @@ public:
                              kWarpPartitionsK>;
 
   public:
-    cutlass::AlignedArray<ElementC, AccumulatorShape::kCount> acc_buffer;
+    cutlass::AlignedArray<ElementAccumulator, AccumulatorShape::kCount> acc_buffer;
   };
 
 public:
@@ -208,17 +111,100 @@ public:
             frag_shared_reduce,
             shared_storage.acc_buffer.data() + shared_offset);
 
-        ElementC shared_acc = ElementC(0);
+        ElementAccumulator shared_acc = ElementAccumulator(0);
+
         CUTLASS_PRAGMA_UNROLL
         for (int i = 0; i < kWarpPartitionsK; i++) {
-          shared_acc += frag_shared_reduce[i];
+          shared_acc += *(frag_shared_reduce.data() + i);
         }
 
-        accumulator[r] = shared_acc;
+        *(accumulator.data() + r) = shared_acc;
       }
     }
   }
 };
+
+///< Partial Specialization for thread combine
+template <
+  typename ElementAccumulator_,
+  typename LayoutAccumulator_,
+  int ElementCount,
+  typename WarpThreadArrangement,
+  typename WarpCount
+>
+class AccumulatorCombine<
+  ElementAccumulator_,
+  LayoutAccumulator_,
+  ElementCount,
+  WarpThreadArrangement,
+  WarpCount,
+  1,
+  1
+>{
+public:
+  using ElementAccumulator = ElementAccumulator_;
+  using LayoutAccumulator = LayoutAccumulator_;
+  static int const kElementCount = ElementCount;
+  static int const kThreadsPerGroup = 1;
+  static int const kWarpPartitionsK = 1;
+
+  using FragmentC = cutlass::Array<ElementAccumulator, kElementCount>;
+
+public:
+  struct SharedStorage {};
+
+public:
+  CUTLASS_HOST_DEVICE
+  AccumulatorCombine() {}
+
+  CUTLASS_DEVICE
+  void operator()(SharedStorage &shared_storage, FragmentC &accumulator) {}
+};
+
+
+///< Partial Specialization for warp combine
+template <
+ typename ElementAccumulator_,
+ typename LayoutAccumulator_,
+ int ElementCount,
+ typename WarpThreadArrangement,
+ typename WarpCount,
+ int ThreadsPerGroup
+>
+class AccumulatorCombine<
+ ElementAccumulator_,
+ LayoutAccumulator_,
+ ElementCount,
+ WarpThreadArrangement,
+ WarpCount,
+ ThreadsPerGroup,
+ 1
+>{
+public:
+  using ElementAccumulator = ElementAccumulator_;
+  using LayoutAccumulator = LayoutAccumulator_;
+  static int const kElementCount = ElementCount;
+  static int const kThreadsPerGroup = ThreadsPerGroup;
+  static int const kWarpPartitionsK = 1;
+
+  using FragmentC = cutlass::Array<ElementAccumulator, kElementCount>;
+  using CombineOp =
+      cutlass::gemm::warp::Reduce<ElementAccumulator, kElementCount, kThreadsPerGroup>;
+
+public:
+  struct SharedStorage {};
+
+public:
+  CUTLASS_HOST_DEVICE
+  AccumulatorCombine() {}
+
+  CUTLASS_DEVICE
+  void operator()(SharedStorage &shared_storage, FragmentC &accumulator) {
+    CombineOp combine_op;
+    combine_op(accumulator);
+  }
+};
+
 
 } // namespace threadblock
 } // namespace gemm

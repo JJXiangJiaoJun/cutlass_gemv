@@ -56,8 +56,7 @@ struct Gemv<
                   int M,
                   int N,
                   int K,
-                  ElementAccumulate alpha,
-                  ElementAccumulate beta) {
+                  ElementAccumulate alpha) {
     for (int m_i = 0; m_i < M; ++m_i) {
       ElementAccumulate tmp =
           (C == nullptr ? ElementAccumulate(0) : (static_cast<ElementAccumulate>(C[m_i])));
@@ -112,8 +111,7 @@ struct Gemv<
                   int M,
                   int N,
                   int K,
-                  ElementAccumulate alpha,
-                  ElementAccumulate beta) {
+                  ElementAccumulate alpha) {
     for (int m_i = 0; m_i < M; ++m_i) {
       ElementAccumulate tmp =
           (C == nullptr ? ElementAccumulate(0) : (static_cast<ElementAccumulate>(C[m_i])));

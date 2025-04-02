@@ -19,10 +19,18 @@ namespace gemm {
 namespace threadblock {
 
 template<
+  /// Element type for A matrix operand
+  typename ElementA_,
   /// Access granularity of A matrix in units of elements
   int AlignmentA,
+  /// Element type for B matrix operand
+  typename ElementB_,
   /// Access granularity of B matrix in units of elements
   int AlignmentB,
+  /// Element type for internal accumulation
+  typename ElementAccumulator_,
+  /// Tag indicating architecture to tune for
+  typename ArchTag_,
   /// Threadblock-level tile size (concept: GemmShape)
   typename ThreadblockShape_,
   /// Warp-level tile size (concept: GemmShape)
@@ -31,20 +39,25 @@ template<
   typename WarpThreadArrangement_
 >
 struct DefaultMmaGemv<
- float,
+ ElementA_,
  cutlass::layout::RowMajor,
  AlignmentA,
- float,
+ ElementB_,
  cutlass::layout::ColumnMajor,
  AlignmentB,
- float,
- arch::Sm50,
+ ElementAccumulator_,
+ ArchTag_,
  ThreadblockShape_,
  WarpShape_,
  GemmShape<1, 1, 1>,
  WarpThreadArrangement_,
  arch::OpClassSimt
 >{
+
+  using ElementA = ElementA_;
+  using ElementB = ElementB_;
+  using ElementAccumulator = ElementAccumulator_;
+  using ArchTag = ArchTag_;
 
   using ThreadBlockShape = ThreadblockShape_;
   using WarpShape = WarpShape_;
@@ -59,17 +72,17 @@ struct DefaultMmaGemv<
                                                               WarpShape,
                                                               InstructionShape,
                                                               WarpThreadArrangement,
-                                                              float,
+                                                              ElementA,
                                                               cutlass::layout::RowMajor,
-                                                              float,
+                                                              ElementB,
                                                               cutlass::layout::ColumnMajor,
-                                                              float,
+                                                              ElementAccumulator,
                                                               cutlass::layout::RowMajor,
                                                               arch::OpClassSimt>;
 
   using IteratorA =
       cutlass::transform::threadblock::PredicatedTileIterator<cutlass::MatrixShape<MmaCore::Shape::kM, MmaCore::Shape::kK>,
-                                                              float,
+                                                              ElementA,
                                                               cutlass::layout::RowMajor,
                                                               1,
                                                               typename MmaCore::IteratorThreadMapA,
@@ -77,7 +90,7 @@ struct DefaultMmaGemv<
 
   using IteratorB =
       cutlass::transform::threadblock::PredicatedTileIterator<cutlass::MatrixShape<MmaCore::Shape::kK, MmaCore::Shape::kM>,
-                                                              float,
+                                                              ElementB,
                                                               cutlass::layout::ColumnMajor,
                                                               0,
                                                               typename MmaCore::IteratorThreadMapB,
@@ -87,7 +100,7 @@ struct DefaultMmaGemv<
       cutlass::gemm::threadblock::MmaSingleStageGemv<typename MmaCore::Shape,
                                                      IteratorA,
                                                      IteratorB,
-                                                     float,
+                                                     ElementAccumulator,
                                                      cutlass::layout::RowMajor,
                                                      typename MmaCore::MmaPolicy>;
 };

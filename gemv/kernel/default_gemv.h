@@ -20,21 +20,21 @@ namespace kernel {
 
 template <
     /// Element type for A matrix operand
-    typename ElementA_,
+    typename ElementA,
     /// Layout type for A matrix operand
-    typename LayoutA_,
+    typename LayoutA,
     /// Access granularity of A matrix in units of elements
     int kAlignmentA,
     /// Element type for B matrix operand
-    typename ElementB_,
+    typename ElementB,
     /// Layout type for B matrix operand
-    typename LayoutB_,
+    typename LayoutB,
     /// Access granularity of B matrix in units of elements
     int kAlignmentB,
     /// Element type for C and D matrix operands
-    typename ElementC_,
+    typename ElementC,
     /// Layout type for C and D matrix operands
-    typename LayoutC_,
+    typename LayoutC,
     /// Element type for internal accumulation
     typename ElementAccumulator,
     /// Operator class tag
@@ -48,16 +48,24 @@ template <
     /// Warp-level tile size (concept: GemmShape)
     typename InstructionShape,
     /// Warp thread layout (concept: MatrixShape)
-    typename WarpThreadArrangement_,
+    typename WarpThreadArrangement,
     /// Epilogue output operator
     typename EpilogueOutputOp
 >
 struct DefaultGemv;
 
 template<
+  /// Element type for A matrix operand
+  typename ElementA,
   int kAlignmentA,
+  /// Element type for B matrix operand
+  typename ElementB,
   int kAlignmentB,
   typename ElementC,
+  /// Element type for internal accumulation
+  typename ElementAccumulator,
+  /// Tag indicating architecture to tune for
+  typename ArchTag,
   /// Threadblock-level tile size (concept: GemmShape)
   typename ThreadBlockShape,
   /// Warp-level tile size (concept: GemmShape)
@@ -68,17 +76,17 @@ template<
   typename EpilogueOutputOp
 >
 struct DefaultGemv<
- float,
+ ElementA,
  cutlass::layout::RowMajor,
  kAlignmentA,
- float,
+ ElementB,
  cutlass::layout::ColumnMajor,
  kAlignmentB,
  ElementC,
  cutlass::layout::RowMajor,
- float,
+ ElementAccumulator,
  arch::OpClassSimt,
- arch::Sm50,
+ ArchTag,
  ThreadBlockShape,
  WarpShape,
  GemmShape<1, 1, 1>,
@@ -86,14 +94,14 @@ struct DefaultGemv<
  EpilogueOutputOp
 > {
   using DefaultMma =
-      typename cutlass::gemm::threadblock::DefaultMmaGemv<float,
+      typename cutlass::gemm::threadblock::DefaultMmaGemv<ElementA,
                                                           cutlass::layout::RowMajor,
                                                           kAlignmentA,
-                                                          float,
+                                                          ElementB,
                                                           cutlass::layout::ColumnMajor,
                                                           kAlignmentB,
-                                                          float,
-                                                          arch::Sm50,
+                                                          ElementAccumulator,
+                                                          ArchTag,
                                                           ThreadBlockShape,
                                                           WarpShape,
                                                           GemmShape<1, 1, 1>,
@@ -103,7 +111,7 @@ struct DefaultGemv<
   using Mma = typename DefaultMma::ThreadBlockMma;
 
   using AccumulatorCombine = cutlass::gemm::threadblock::AccumulatorCombine<
-      float,
+      ElementAccumulator,
       cutlass::layout::RowMajor,
       Mma::FragmentC::kElements,
       cutlass::MatrixShape<MmaCore::UnderlyingWarpThreadArrangement::kStrided,

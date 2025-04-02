@@ -26,20 +26,24 @@ template<
     typename WarpShape_,
     /// Shape of warp thread layout (concept: MatrixShape)
     typename WarpThreadArrangement_,
-    /// Layout of accumulator
-    typename LayoutC_
+    /// Element data type of A operand
+    typename ElementA_,
+    /// Element data type of B operand
+    typename ElementB_,
+    /// Data type of accumulator
+    typename ElementC_
 >
 struct DefaultMmaCoreGemv<
   Shape_,
   WarpShape_,
   GemmShape<1, 1, 1>,
   WarpThreadArrangement_,
-  float,
+  ElementA_,
   cutlass::layout::RowMajor,
-  float,
+  ElementB_,
   cutlass::layout::ColumnMajor,
-  float,
-  LayoutC_,
+  ElementC_,
+  cutlass::layout::RowMajor,
   arch::OpClassSimt
 >{
 
@@ -47,12 +51,12 @@ struct DefaultMmaCoreGemv<
   using WarpShape = WarpShape_;
   using InstructionShape = GemmShape<1, 1, 1>;
   using WarpThreadArrangement = WarpThreadArrangement_;
-  using ElementA = float;
+  using ElementA = ElementA_;
   using LayoutA  = cutlass::layout::RowMajor;
-  using ElementB = float;
+  using ElementB = ElementB_;
   using LayoutB  = cutlass::layout::ColumnMajor;
-  using ElementC = float;
-  using LayoutC  = LayoutC_;
+  using ElementC = ElementC_;
+  using LayoutC  = cutlass::layout::RowMajor;
   using OperatorClass = arch::OpClassSimt;
 
   using WarpCount = GemmShape<

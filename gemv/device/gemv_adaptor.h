@@ -60,6 +60,7 @@ public:
   using ElementC = ElementC_;
   using LayoutC = LayoutC_;
   using TensorRefC = TensorRef<ElementC const, LayoutC>;
+  using TensorRefD = TensorRef<ElementC, LayoutC>;
   using ElementAccumulator = ElementAccumulator_;
   using OperatorClass = OperatorClass_;
   using ArchTag = ArchTag_;

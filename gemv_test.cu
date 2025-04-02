@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 
 #include "cutlass/cutlass.h"
+#include "cutlass/half.h"
 #include "cutlass/arch/arch.h"
 #include "cutlass/array.h"
 #include "cutlass/layout/matrix.h"
@@ -13,17 +14,17 @@
 
 #include "gemv/device/gemv_adaptor.h"
 
-using ElementA = float;
+using ElementA = cutlass::half_t;
 using LayoutA  = cutlass::layout::RowMajor;
-using ElementB = float;
+using ElementB = cutlass::half_t;
 using LayoutB  = cutlass::layout::ColumnMajor;
-using ElementC = float;
+using ElementC = cutlass::half_t;
 using LayoutC  = cutlass::layout::RowMajor;
 using ElementAccumulator = float;
 using OperatorClass = cutlass::arch::OpClassSimt;
 using ArchTag = cutlass::arch::Sm50;
-using ThreadBlockShape = cutlass::gemm::GemmShape<4, 1, 256>;
-using WarpShape = cutlass::gemm::GemmShape<4, 1, 64>;
+using ThreadBlockShape = cutlass::gemm::GemmShape<4, 1, 512>;
+using WarpShape = cutlass::gemm::GemmShape<4, 1, 128>;
 using InstructionShape = cutlass::gemm::GemmShape<1, 1, 1>;
 using WarpThreadArrangement = cutlass::MatrixShape<2, 16>;
 using EpilogueOutputOp = cutlass::epilogue::thread::LinearCombination<
@@ -39,8 +40,8 @@ using EpilogueOutputOp = cutlass::epilogue::thread::LinearCombination<
 
 static const int kGemmN = 1;
 static const int kStages = 1;
-static const int kAlignmentA = 4;
-static const int kAlignmentB = 4;
+static const int kAlignmentA = 8;
+static const int kAlignmentB = 8;
 
 
 using DeviceKernel = cutlass::gemm::device::GemvAdaptor<ElementA,
@@ -61,8 +62,10 @@ using DeviceKernel = cutlass::gemm::device::GemvAdaptor<ElementA,
                                                         kAlignmentA,
                                                         kAlignmentB>;
 
-using HostKernel = reference::Gemv<ElementA, LayoutA, ElementB, LayoutB,
-                                   ElementC, LayoutC, ElementAccumulator>;
+using HostKernel =
+    reference::Gemv<ElementA, LayoutA, ElementB, LayoutB, ElementC, LayoutC,
+                    ElementAccumulator, ElementAccumulator,
+                    cutlass::epilogue::thread::Identity<ElementAccumulator>>;
 
 void device_gemv(const ElementA *ptr_A,
                  const ElementB *ptr_B,
@@ -72,13 +75,13 @@ void device_gemv(const ElementA *ptr_A,
                  int n,
                  int k,
                  float alpha = 1.0f) {
-  typename DeviceKernel::Arguments args {
+  typename DeviceKernel::Arguments args{
     cutlass::make_Coord(m, n, k),
-    cutlass::make_TensorRef(const_cast<ElementA *>(ptr_A), cutlass::layout::RowMajor(k)),
-    cutlass::make_TensorRef(const_cast<ElementB *>(ptr_B), cutlass::layout::ColumnMajor(0)),
-    cutlass::make_TensorRef(const_cast<ElementC *>(ptr_C), cutlass::layout::RowMajor(1)),
-    cutlass::make_TensorRef(const_cast<ElementC *>(ptr_D), cutlass::layout::RowMajor(1)),
-    {alpha}
+    cutlass::make_TensorRef(ptr_A, cutlass::layout::RowMajor(k)),
+    cutlass::make_TensorRef(ptr_B, cutlass::layout::ColumnMajor(0)),
+    cutlass::make_TensorRef(ptr_C, cutlass::layout::RowMajor(1)),
+    cutlass::make_TensorRef(ptr_D, cutlass::layout::RowMajor(1)),
+    {static_cast<ElementAccumulator>(alpha)}
   };
 
   DeviceKernel op;
@@ -93,15 +96,14 @@ void host_gemv(const ElementA *ptr_A,
                int m,
                int n,
                int k,
-               float alpha = 1.0f,
-               float beta = 0.0f) {
+               float alpha = 1.0f) {
   HostKernel host_op;
-  host_op(ptr_A, ptr_B, ptr_C, ptr_D, m, n, k, alpha, beta);
+  host_op(ptr_A, ptr_B, ptr_C, ptr_D, m, n, k, static_cast<ElementAccumulator>(alpha));
 }
 
 int main() {
 
-  int M = 1024, K = 4096;
+  int M = 1024, K = 1024;
 
   float alpha = 1.0f;
 

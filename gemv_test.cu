@@ -114,7 +114,7 @@ int main() {
 
   reference::random_initializer<ElementA>::init(h_A, M * K);
   reference::random_initializer<ElementB>::init(h_B, kGemmN * K);
-  reference::random_initializer<ElementC>::init(h_bias, M, 1, 1);
+  reference::random_initializer<ElementC>::init(h_bias, M);
 
   ElementA *d_A;
   ElementB *d_B;

@@ -191,13 +191,7 @@ public:
     result = cudaGetLastError();
 
     if (result != cudaSuccess) {
-      std::cout << "Gemv adapter cuda error: " << cudaGetErrorString(result) << "\n"
-             << "Launch configuration details {\n"
-             << "    grid size: (" << grid.x << ", " << grid.y << ", " << grid.z << ")\n"
-             << "    block size: (" << block.x << ", " << block.y << ", " << block.z << ")\n"
-             << "    shared memory size: " << smem_size << "Bytes\n"
-             << "    stream address: " << stream << "\n"
-             << "}\n";
+      std::cout << "Gemv adapter cuda  Launch error: " << cudaGetErrorString(result) << "\n";
       exit(-1);
     }
   }

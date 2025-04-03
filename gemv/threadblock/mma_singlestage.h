@@ -68,14 +68,6 @@ public:
   /// Number of stages
   static int const kStages = 1;
 
-  static_assert(kWarpGemmIterations > 1,
-                "The pipelined structure requires at least two warp-level "
-                "GEMM operations.");
-
-  static_assert((kWarpGemmIterations % 2) == 0,
-                "Inner loop iteration must be an even number.");
-
-
   struct SharedStorage {};
 
 

@@ -110,24 +110,6 @@ public:
     iterator_A.clear_mask(gemm_k_iterations <= 1);
     iterator_B.clear_mask(gemm_k_iterations <= 1);
 
-    // int warp_idx = threadIdx.x / 32;
-    // int lane_idx = threadIdx.x % 32;
-
-    // if (blockIdx.x == 0 && warp_idx == 0 && lane_idx == 0) {
-    //   for (int i = 0; i < tb_frag_A.size(); i++) {
-    //     printf("block %d, warp %d, lane %d, tb_frag_A[%d]=%f, tb_frag_B[%d]=%f WarpGemm::kK %d\n",
-    //            blockIdx.x,
-    //            warp_idx,
-    //            lane_idx,
-    //            i,
-    //            tb_frag_A[i],
-    //            i,
-    //            tb_frag_B[i],
-    //            WarpGemm::kK);
-    //   }
-    // }
-
-
     for(; gemm_k_iterations > 0; --gemm_k_iterations) {
 
       CUTLASS_PRAGMA_UNROLL

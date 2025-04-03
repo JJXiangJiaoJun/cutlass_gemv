@@ -10,7 +10,7 @@
 #include "cutlass/layout/matrix.h"
 
 
-#include "gemv/transform/pitch_linear_thread_map.h"
+#include "gemv/transform/threadblock/pitch_linear_thread_map.h"
 #include "gemv/warp/mma_simt_policy.h"
 #include "gemv/warp/mma_simt.h"
 #include "gemv/threadblock/default_mma_core.h"
@@ -85,7 +85,7 @@ struct DefaultMmaCoreGemv<
   using UnderlyingWarpThreadArrangement =
       cutlass::PitchLinearShape<WarpThreadArrangement::kColumn, WarpThreadArrangement::kRow>;
 
-  using IteratorThreadMapA = cutlass::transform::PitchLinearWarpStripminedThreadMap<
+  using IteratorThreadMapA = cutlass::transform::threadblock::PitchLinearWarpStripminedThreadMap<
     cutlass::PitchLinearShape<Shape::kK, Shape::kM>,
     kThreads,
     cutlass::PitchLinearShape<WarpCount::kK, WarpCount::kM>,
@@ -93,7 +93,7 @@ struct DefaultMmaCoreGemv<
     kElementsPerAccess
   >;
 
-  using IteratorThreadMapB = cutlass::transform::PitchLinearWarpStripminedThreadMap<
+  using IteratorThreadMapB = cutlass::transform::threadblock::PitchLinearWarpStripminedThreadMap<
     cutlass::PitchLinearShape<Shape::kK, Shape::kM>,
     kThreads,
     cutlass::PitchLinearShape<WarpCount::kK, WarpCount::kM>,
@@ -123,6 +123,112 @@ struct DefaultMmaCoreGemv<
   using MmaPolicy = cutlass::gemm::warp::MmaGemvPolicy<MmaWarpSimtGemv, WarpCount::kK>;
 };
 
+
+template<
+    /// Shape of threadblock-scoped matrix multiply operator
+    typename Shape_,
+    /// Shape of warp-level matrix multiply operator
+    typename WarpShape_,
+    /// Shape of warp thread layout (concept: MatrixShape)
+    typename WarpThreadArrangement_,
+    /// Element data type of A operand
+    typename ElementA_,
+    /// Element data type of B operand
+    typename ElementB_,
+    /// Data type of accumulator
+    typename ElementC_
+>
+struct DefaultMmaCoreGemv<
+  Shape_,
+  WarpShape_,
+  GemmShape<1, 1, 1>,
+  WarpThreadArrangement_,
+  ElementA_,
+  cutlass::layout::ColumnMajor,
+  ElementB_,
+  cutlass::layout::RowMajor,
+  ElementC_,
+  cutlass::layout::ColumnMajor,
+  arch::OpClassSimt
+>{
+
+  using Shape = Shape_;
+  using WarpShape = WarpShape_;
+  using InstructionShape = GemmShape<1, 1, 1>;
+  using WarpThreadArrangement = WarpThreadArrangement_;
+  using ElementA = ElementA_;
+  using LayoutA  = cutlass::layout::ColumnMajor;
+  using ElementB = ElementB_;
+  using LayoutB  = cutlass::layout::RowMajor;
+  using ElementC = ElementC_;
+  using LayoutC  = cutlass::layout::ColumnMajor;
+  using OperatorClass = arch::OpClassSimt;
+
+  using WarpCount = GemmShape<
+    Shape::kM / WarpShape::kM,
+    Shape::kN / WarpShape::kN,
+    Shape::kK / WarpShape::kK
+  >;
+
+  static_assert(Shape::kN == 1, "");
+  static_assert(WarpShape::kN == 1, "");
+  static_assert(WarpCount::kN == 1, "");
+
+
+  /// Number of threads per warp
+  static int const kWarpSize = 32;
+
+  static_assert(WarpThreadArrangement::kCount == kWarpSize, "");
+
+  /// Number of threads total
+  static int const kThreads = WarpCount::kCount * kWarpSize;
+
+  static int const kAccessSizeInBits = 128;
+
+  static int const kElementsPerAccess = kAccessSizeInBits / sizeof_bits<ElementA>::value;
+
+  using UnderlyingWarpThreadArrangement =
+      cutlass::PitchLinearShape<WarpThreadArrangement::kRow, WarpThreadArrangement::kColumn>;
+
+  using IteratorThreadMapA = cutlass::transform::threadblock::PitchLinearWarpStripminedThreadMap<
+    cutlass::PitchLinearShape<Shape::kM, Shape::kK>,
+    kThreads,
+    cutlass::PitchLinearShape<WarpCount::kM, WarpCount::kK>,
+    UnderlyingWarpThreadArrangement,
+    kElementsPerAccess
+  >;
+
+  using IteratorThreadMapB = cutlass::transform::threadblock::PitchLinearWarpStripminedBroadcastThreadMap<
+    cutlass::PitchLinearShape<Shape::kM, Shape::kK>,
+    kThreads,
+    cutlass::PitchLinearShape<WarpCount::kM, WarpCount::kK>,
+    UnderlyingWarpThreadArrangement,
+    1
+  >;
+
+
+  ///< =============================
+  using Policy = cutlass::gemm::warp::MmaSimtGemvPolicy<
+      cutlass::MatrixShape<UnderlyingWarpThreadArrangement::kContiguous,
+                           UnderlyingWarpThreadArrangement::kStrided>,
+      InstructionShape>;
+
+  using RegisterTileShape =
+      cutlass::MatrixShape<IteratorThreadMapA::Iterations::kContiguous * kElementsPerAccess,
+                           IteratorThreadMapA::Iterations::kStrided>;
+
+  using MmaWarpSimtGemv = cutlass::gemm::warp::MmaSimtGemv<WarpShape,
+                                                           RegisterTileShape,
+                                                           ElementA,
+                                                           LayoutA,
+                                                           ElementB,
+                                                           LayoutB,
+                                                           ElementC,
+                                                           LayoutC,
+                                                           Policy>;
+
+  using MmaPolicy = cutlass::gemm::warp::MmaGemvPolicy<MmaWarpSimtGemv, WarpCount::kK>;
+};
 
 }
 }

@@ -10,6 +10,7 @@
 namespace cutlass {
 namespace epilogue {
 namespace threadblock {
+
 template <
   typename Shape_,
   int Threads,
@@ -34,11 +35,11 @@ struct PitchLinearWarpVectorThreadMap {
   /// Shape of access by each thread
   using ThreadAccessShape = layout::PitchLinearShape<kElementsPerAccess, 1>;
 
-  static_assert(Shape::kContiguous == 1,
-                "PitchLinearWarpVectorThreadMap contiguous shape must be 1");
 
-  static_assert(kElementsPerAccess == 1, "");
-
+  ///< Shape must be 1xN or Nx1
+  static_assert(Shape::kContiguous == 1 || Shape::kStrided == 1,
+                "PitchLinearWarpVectorThreadMap contiguous shape or strided "
+                "shape must be 1");
 
   /// Internal details made public to facilitate introspection
   struct Detail {
@@ -63,29 +64,36 @@ struct PitchLinearWarpVectorThreadMap {
     >;
 
     static_assert(
-      !(ShapeInAccesses::kStrided % WarpThreadArrangement::kStrided),
+      !(ShapeInAccesses::kStrided % WarpThreadArrangement::kStrided) || (Shape::kStrided == 1),
       "ShapeInAccesses must be divisible by WarpThreadArrangement.");
+
+    static const int kWarpAccessIterationsContiguous = (ShapeInAccesses::kContiguous < WarpThreadArrangement::kContiguous) ? 1 : (ShapeInAccesses::kContiguous / WarpThreadArrangement::kContiguous);
+    static const int kWarpAccessIterationsStrided = (ShapeInAccesses::kStrided < WarpThreadArrangement::kStrided) ? 1 : (ShapeInAccesses::kStrided / WarpThreadArrangement::kStrided);
 
     // compute number of warp-level accesses total
     using WarpAccessIterations =
-        layout::PitchLinearShape<1, ShapeInAccesses::kStrided / WarpThreadArrangement::kStrided>;
+        layout::PitchLinearShape<kWarpAccessIterationsContiguous, kWarpAccessIterationsStrided>;
+
+    static_assert(WarpAccessIterations::kCount,
+                  "Number of WarpAccessIterations must be non-zero");
 
     using WarpArrangement = WarpArrangement_;
 
     // Divide it into the number of warps, first partitioning the strided dimension then the
     // contiguous.
-    static int const kWarpsStrided = WarpArrangement::kStrided;
-
-    static int const kWarpsContiguous = WarpArrangement::kContiguous;
+    static const int kWarpsContiguous = WarpArrangement::kContiguous;
+    static const int kWarpsStrided = WarpArrangement::kStrided;
     /// Arrangement of warps within a threadblock-scoped tile
   };
 
+  static const int kIterationsContiguos = (Detail::WarpAccessIterations::kContiguous < Detail::kWarpsContiguous) ? 1 : (Detail::WarpAccessIterations::kContiguous / Detail::kWarpsContiguous);
+  static const int kIterationsStrided = (Detail::WarpAccessIterations::kStrided < Detail::kWarpsStrided) ? 1 : (Detail::WarpAccessIterations::kStrided / Detail::kWarpsStrided);
+
   ///< Iterations along each dimension (concept: PitchLinearShape)
   using Iterations =
-      layout::PitchLinearShape<1, Detail::WarpAccessIterations::kStrided / Detail::kWarpsStrided>;
+      layout::PitchLinearShape<kIterationsContiguos, kIterationsStrided>;
 
-  static_assert(Iterations::kCount,
-    "Number of iterations must be non-zero");
+  static_assert(Iterations::kCount, "Number of iterations must be non-zero");
 
   ///< Delta betweeen accesses (units of elements, concept: PitchLinearShape)
   using Delta = layout::PitchLinearShape<

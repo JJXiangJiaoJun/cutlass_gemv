@@ -180,8 +180,9 @@ public:
                                     smem_size);
 
       if (result != cudaSuccess) {
-        std::cout << "failed"  << std::endl;
-        return;
+        std::cout << "Gemv adapter cuda error: " << cudaGetErrorString(result)
+                  << ", shared memory size: " << smem_size << "\n";
+        exit(-1);
       }
     }
 
@@ -190,8 +191,14 @@ public:
     result = cudaGetLastError();
 
     if (result != cudaSuccess) {
-      std::cout << "launch failed" << std::endl;
-      return;
+      std::cout << "Gemv adapter cuda error: " << cudaGetErrorString(result) << "\n"
+             << "Launch configuration details {\n"
+             << "    grid size: (" << grid.x << ", " << grid.y << ", " << grid.z << ")\n"
+             << "    block size: (" << block.x << ", " << block.y << ", " << block.z << ")\n"
+             << "    shared memory size: " << smem_size << "Bytes\n"
+             << "    stream address: " << stream << "\n"
+             << "}\n";
+      exit(-1);
     }
   }
 

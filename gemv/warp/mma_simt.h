@@ -74,10 +74,10 @@ public:
 
 public:
   ///<
-  using IteratorA = MmaSimtRegisterTileIterator<WarpMmaShape, RegisterTileShape, ElementA, Policy, LayoutA>;
+  using IteratorA = MmaSimtRegisterTileIterator<WarpMmaShape, RegisterTileShape, Operand::kA, ElementA, Policy, LayoutA>;
   using FragmentA = typename IteratorA::Fragment;
 
-  using IteratorB = MmaSimtRegisterTileIterator<WarpMmaShape, RegisterTileShape, ElementB, Policy, LayoutB>;
+  using IteratorB = MmaSimtRegisterTileIterator<WarpMmaShape, RegisterTileShape, Operand::kB, ElementB, Policy, LayoutB>;
   using FragmentB = typename IteratorB::Fragment;
 
   using FragmentC = typename ThreadMma::FragmentC;

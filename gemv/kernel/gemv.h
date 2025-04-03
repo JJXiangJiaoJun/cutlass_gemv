@@ -1,5 +1,6 @@
 #pragma once
 
+#include <type_traits>
 #include "cutlass/cutlass.h"
 #include "cutlass/array.h"
 
@@ -27,11 +28,14 @@ public:
   using AccumulatorCombine = AccumulatorCombine_;
   using Epilogue = Epilogue_;
   using OutputOp = typename Epilogue::OutputOp;
+  using LayoutB = typename Mma::IteratorB::Layout;
 
+  static_assert(std::is_same_v<LayoutB, cutlass::layout::RowMajor> || std::is_same_v<LayoutB, cutlass::layout::ColumnMajor>, "");
 
   /// Warp count (concept: GemmShape)
   using WarpCount = typename Mma::WarpCount;
   static int const kThreads = 32 * WarpCount::kCount;
+  static const bool kNeedBroadcastB = std::is_same_v<LayoutB, cutlass::layout::RowMajor>;
 
   struct Params {
     cutlass::gemm::GemmCoord problem_size;
@@ -97,7 +101,7 @@ public:
 
     cutlass::MatrixCoord tb_offset_B{
       0,
-      threadblock_tile_offset.n() * Mma::Shape::kN
+      kNeedBroadcastB ? 0 : threadblock_tile_offset.n() * Mma::Shape::kN
     };
 
     int gemm_k_iterations = (params.problem_size.k() + Mma::Shape::kK - 1) / Mma::Shape::kK;
@@ -128,31 +132,9 @@ public:
 
     mma(gemm_k_iterations, accumulators, iterator_A, iterator_B, accumulators);
 
-    // if (blockIdx.x == 0 && warp_idx == 0 && lane_idx == 4) {
-    //   for (int i = 0; i < accumulators.size(); i++) {
-    //     printf("block %d, warp %d, lane %d, mma[%d]=%f\n",
-    //            blockIdx.x,
-    //            warp_idx,
-    //            lane_idx,
-    //            i,
-    //            accumulators[i]);
-    //   }
-    // }
-
     ///< accumulator combine
     AccumulatorCombine acc_combine;
     acc_combine(shared_storage, accumulators);
-
-    // if (blockIdx.x == 0 && warp_idx == 0 && lane_idx == 4) {
-    //   for (int i = 0; i < accumulators.size(); i++) {
-    //     printf("block %d, warp %d, lane %d, acc[%d]=%f\n",
-    //            blockIdx.x,
-    //            warp_idx,
-    //            lane_idx,
-    //            i,
-    //            accumulators[i]);
-    //   }
-    // }
 
     cutlass::MatrixCoord tb_offset_C{
       threadblock_tile_offset.m() * Mma::Shape::kM,

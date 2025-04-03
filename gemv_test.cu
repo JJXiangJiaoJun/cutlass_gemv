@@ -16,7 +16,7 @@
 
 using ElementA = cutlass::half_t;
 using LayoutA  = cutlass::layout::RowMajor;
-using ElementB = cutlass::half_t;
+using ElementB = ElementA;
 using LayoutB  = cutlass::layout::ColumnMajor;
 using ElementC = cutlass::half_t;
 using LayoutC  = cutlass::layout::RowMajor;
@@ -24,12 +24,36 @@ using ElementAccumulator = float;
 using OperatorClass = cutlass::arch::OpClassSimt;
 using ArchTag = cutlass::arch::Sm50;
 using ThreadBlockShape = cutlass::gemm::GemmShape<4, 1, 512>;
-using WarpShape = cutlass::gemm::GemmShape<4, 1, 128>;
+using WarpShape = cutlass::gemm::GemmShape<2, 1, 256>;
 using InstructionShape = cutlass::gemm::GemmShape<1, 1, 1>;
 using WarpThreadArrangement = cutlass::MatrixShape<2, 16>;
+
+///< ====================================================================
+///< Test for column major A matrix
+// using ElementA = cutlass::half_t;
+// using LayoutA  = cutlass::layout::ColumnMajor;
+// using ElementB = ElementA;
+// using LayoutB  = cutlass::layout::RowMajor;
+// using ElementC = cutlass::half_t;
+// using LayoutC  = cutlass::layout::ColumnMajor;
+// using ElementAccumulator = float;
+// using OperatorClass = cutlass::arch::OpClassSimt;
+// using ArchTag = cutlass::arch::Sm50;
+// using ThreadBlockShape = cutlass::gemm::GemmShape<128, 1, 16>;
+// using WarpShape = cutlass::gemm::GemmShape<64, 1, 8>;
+// using InstructionShape = cutlass::gemm::GemmShape<1, 1, 1>;
+// using WarpThreadArrangement = cutlass::MatrixShape<8, 4>;
+
+
+static const int kGemmN = 1;
+static const int kStages = 1;
+static const int kAlignmentA = 16 / sizeof(ElementA);
+static const int kAlignmentB = std::is_same_v<LayoutB, cutlass::layout::RowMajor> ? 1 : (16 / sizeof(ElementB));
+static const int kAlignmentC = std::is_same_v<LayoutC, cutlass::layout::RowMajor> ? 1 : kAlignmentA;
+
 using EpilogueOutputOp = cutlass::epilogue::thread::LinearCombination<
     ElementC,            // <- data type of output matrix
-    1,                   // <- this is the number of elements per
+    kAlignmentC,         // <- this is the number of elements per
                          // vectorized memory access. For half
                          // precision, it's 8 elements. This becomes
                          // the vector width of math instructions in
@@ -37,11 +61,6 @@ using EpilogueOutputOp = cutlass::epilogue::thread::LinearCombination<
     ElementAccumulator,  // <- data type of accumulator
     ElementAccumulator,  // <- data type for alpha in linear combination function
     cutlass::epilogue::thread::ScaleType::NoBetaScaling>;  // <- alpha x C + bias
-
-static const int kGemmN = 1;
-static const int kStages = 1;
-static const int kAlignmentA = 8;
-static const int kAlignmentB = 8;
 
 
 using DeviceKernel = cutlass::gemm::device::GemvAdaptor<ElementA,
@@ -75,12 +94,18 @@ void device_gemv(const ElementA *ptr_A,
                  int n,
                  int k,
                  float alpha = 1.0f) {
+
+  int lda = std::is_same_v<LayoutA, cutlass::layout::RowMajor> ? k : m;
+  int ldb = std::is_same_v<LayoutB, cutlass::layout::ColumnMajor> ? 0 : 1;
+  int ldc = std::is_same_v<LayoutC, cutlass::layout::RowMajor> ? 1 : m;
+  int ldd = ldc;
+
   typename DeviceKernel::Arguments args{
     cutlass::make_Coord(m, n, k),
-    cutlass::make_TensorRef(ptr_A, cutlass::layout::RowMajor(k)),
-    cutlass::make_TensorRef(ptr_B, cutlass::layout::ColumnMajor(0)),
-    cutlass::make_TensorRef(ptr_C, cutlass::layout::RowMajor(1)),
-    cutlass::make_TensorRef(ptr_D, cutlass::layout::RowMajor(1)),
+    cutlass::make_TensorRef(ptr_A, LayoutA(lda)),
+    cutlass::make_TensorRef(ptr_B, LayoutB(ldb)),
+    cutlass::make_TensorRef(ptr_C, LayoutC(ldc)),
+    cutlass::make_TensorRef(ptr_D, LayoutC(ldd)),
     {static_cast<ElementAccumulator>(alpha)}
   };
 
@@ -103,7 +128,7 @@ void host_gemv(const ElementA *ptr_A,
 
 int main() {
 
-  int M = 1024, K = 1024;
+  int M = 2048, K = 4096;
 
   float alpha = 1.0f;
 
@@ -140,10 +165,10 @@ int main() {
 
   cudaDeviceSynchronize();
 
-  cudaError_t err = cudaGetLastError();
+  cudaError_t result = cudaGetLastError();
 
-  if (err != cudaSuccess) {
-    std::cout << "err" << std::endl;
+  if (result != cudaSuccess) {
+    std::cout << "Execution error: " << cudaGetErrorString(result) << std::endl;
     exit(-1);
   }
 

@@ -31,8 +31,6 @@ public:
 
  static const int kElementsPerAccess = OutputTileIterator::AccessType::kElements;
 
- static_assert(kElementsPerAccess == 1, "");
-
  using AccumulatorFragment = cutlass::Array<ElementAccumulator, OutputTileIterator::Fragment::kElements>;
  using AccumulatorAccessType = cutlass::Array<ElementAccumulator, kElementsPerAccess>;
  using OutputAccessType = Array<typename OutputTileIterator::Element, kElementsPerAccess>;
